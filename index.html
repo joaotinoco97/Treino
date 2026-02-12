@@ -3,9 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Treino Caseiro - Completo</title>
+    <title>Treino Caseiro - Sincronizado</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
@@ -14,254 +19,532 @@
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
         }
+        .sync-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .sync-online {
+            background: #10b981;
+            color: white;
+        }
+        .sync-offline {
+            background: #ef4444;
+            color: white;
+        }
+        .sync-syncing {
+            background: #f59e0b;
+            color: white;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .spinning {
+            animation: spin 1s linear infinite;
+        }
     </style>
 </head>
 <body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+    <!-- Indicador de sincronização -->
+    <div id="syncIndicator" class="sync-indicator sync-offline">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path>
+        </svg>
+        <span id="syncText">Configurar</span>
+    </div>
+
     <div id="app" class="p-4 pb-24">
         <div class="max-w-4xl mx-auto">
-            <!-- Header -->
-            <div class="bg-white rounded-2xl shadow-lg p-6 mb-6">
-                <div class="flex items-center gap-3">
-                    <div class="bg-indigo-600 p-3 rounded-xl">
-                        <svg class="text-white w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path>
-                        </svg>
-                    </div>
+            
+            <!-- Setup Screen -->
+            <div id="setupScreen" class="bg-white rounded-2xl shadow-lg p-8 mb-6">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4">🔧 Configuração Inicial</h2>
+                <p class="text-gray-600 mb-6">Para sincronizar os teus dados entre dispositivos, precisas criar um ID único. Este ID serve como a tua "conta" pessoal.</p>
+                
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                    <h3 class="font-bold text-blue-900 mb-2">💡 Como funciona:</h3>
+                    <ul class="text-sm text-blue-800 space-y-1">
+                        <li>• Cria ou usa um ID único (ex: "joao123")</li>
+                        <li>• Usa o mesmo ID em todos os dispositivos</li>
+                        <li>• Os dados sincronizam automaticamente</li>
+                        <li>• Guarda o teu ID em local seguro!</li>
+                    </ul>
+                </div>
+
+                <div class="space-y-4">
                     <div>
-                        <h1 class="text-2xl font-bold text-gray-800">Treino Caseiro</h1>
-                        <p class="text-sm text-gray-500">Regista, planeia e acompanha</p>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">O teu ID único:</label>
+                        <input 
+                            type="text" 
+                            id="userId" 
+                            placeholder="Ex: joao2024, maria_fit, etc."
+                            class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                        >
+                        <p class="text-xs text-gray-500 mt-1">Pode ser o teu nome, apelido, ou qualquer identificador único. Sem espaços!</p>
                     </div>
-                </div>
 
-                <!-- Stats -->
-                <div class="grid grid-cols-3 gap-3 mt-4">
-                    <div class="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-xl p-3">
-                        <div class="flex items-center gap-1 text-indigo-600 mb-1">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z"></path>
-                            </svg>
-                            <span class="text-xs font-medium">Hoje</span>
-                        </div>
-                        <p id="todayCount" class="text-xl font-bold text-indigo-900">0</p>
-                        <p class="text-xs text-indigo-600">exercícios</p>
-                    </div>
-                    <div class="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-3">
-                        <div class="flex items-center gap-1 text-purple-600 mb-1">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                            </svg>
-                            <span class="text-xs font-medium">Tempo</span>
-                        </div>
-                        <p id="todayDuration" class="text-xl font-bold text-purple-900">0</p>
-                        <p class="text-xs text-purple-600">minutos</p>
-                    </div>
-                    <div class="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-3">
-                        <div class="flex items-center gap-1 text-green-600 mb-1">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-                            </svg>
-                            <span class="text-xs font-medium">Semana</span>
-                        </div>
-                        <p id="weekCount" class="text-xl font-bold text-green-900">0</p>
-                        <p class="text-xs text-green-600">treinos</p>
+                    <button onclick="saveUserId()" class="w-full bg-indigo-600 text-white rounded-lg py-3 font-semibold hover:bg-indigo-700 transition">
+                        Começar a Usar
+                    </button>
+
+                    <div class="text-center">
+                        <button onclick="useLocalOnly()" class="text-sm text-gray-500 hover:text-gray-700 underline">
+                            Usar sem sincronização (só neste dispositivo)
+                        </button>
                     </div>
                 </div>
             </div>
 
-            <!-- Navigation Tabs -->
-            <div class="bg-white rounded-2xl shadow-lg p-2 mb-6">
-                <div class="grid grid-cols-3 gap-2">
-                    <button onclick="showTab('workouts')" id="tab-workouts" class="tab-active py-3 px-4 rounded-xl font-semibold text-sm transition">
-                        Treinos
-                    </button>
-                    <button onclick="showTab('schedule')" id="tab-schedule" class="py-3 px-4 rounded-xl font-semibold text-sm transition bg-gray-100 text-gray-700 hover:bg-gray-200">
-                        Planeamento
-                    </button>
-                    <button onclick="showTab('progress')" id="tab-progress" class="py-3 px-4 rounded-xl font-semibold text-sm transition bg-gray-100 text-gray-700 hover:bg-gray-200">
-                        Progresso
-                    </button>
-                </div>
-            </div>
-
-            <!-- TAB 1: WORKOUTS -->
-            <div id="content-workouts">
-                <!-- Botão Adicionar -->
-                <button id="showFormBtn" class="w-full bg-indigo-600 text-white rounded-xl py-4 px-6 mb-6 flex items-center justify-center gap-2 hover:bg-indigo-700 transition shadow-lg">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-                    </svg>
-                    <span class="font-semibold">Adicionar Exercício</span>
-                </button>
-
-                <!-- Formulário -->
-                <div id="workoutForm" class="bg-white rounded-2xl shadow-lg p-6 mb-6 hidden">
-                    <h2 class="text-xl font-bold text-gray-800 mb-4">Novo Exercício</h2>
-                    
-                    <div class="space-y-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Exercício *</label>
-                            <select id="exercise" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-                                <option value="">Seleciona um exercício</option>
-                                <option value="Reforço muscular com pesos">Reforço muscular com pesos</option>
-                                <option value="Flexões">Flexões</option>
-                                <option value="Abdominais">Abdominais</option>
-                                <option value="Agachamentos">Agachamentos</option>
-                                <option value="Burpees">Burpees</option>
-                                <option value="Prancha">Prancha</option>
-                                <option value="Lunges">Lunges</option>
-                                <option value="Mountain Climbers">Mountain Climbers</option>
-                                <option value="Jumping Jacks">Jumping Jacks</option>
-                                <option value="Tríceps">Tríceps</option>
-                                <option value="Outro">Outro</option>
-                            </select>
-                        </div>
-
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Posição</label>
-                            <input type="text" id="position" placeholder="Ex: Em pé, Deitado, Sentado..." class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-2">Séries</label>
-                                <input type="number" id="sets" placeholder="3" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+            <!-- Main App (inicialmente escondido) -->
+            <div id="mainApp" class="hidden">
+                <!-- Header -->
+                <div class="bg-white rounded-2xl shadow-lg p-6 mb-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-3">
+                            <div class="bg-indigo-600 p-3 rounded-xl">
+                                <svg class="text-white w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path>
+                                </svg>
                             </div>
                             <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-2">Segundos/série</label>
-                                <input type="number" id="secondsPerSet" placeholder="15" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                                <h1 class="text-2xl font-bold text-gray-800">Treino Caseiro</h1>
+                                <p class="text-sm text-gray-500">ID: <span id="displayUserId" class="font-mono"></span></p>
                             </div>
                         </div>
+                        <button onclick="changeUserId()" class="text-sm text-gray-500 hover:text-gray-700">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                            </svg>
+                        </button>
+                    </div>
 
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Repetições</label>
-                            <input type="number" id="reps" placeholder="12" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-                        </div>
-
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Duração (minutos)</label>
-                            <input type="number" id="duration" placeholder="15" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-2">Peso (kg)</label>
-                                <input type="number" id="weight" placeholder="10" step="0.5" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                    <!-- Stats -->
+                    <div class="grid grid-cols-3 gap-3 mt-4">
+                        <div class="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-xl p-3">
+                            <div class="flex items-center gap-1 text-indigo-600 mb-1">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z"></path>
+                                </svg>
+                                <span class="text-xs font-medium">Hoje</span>
                             </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-2">Descanso (seg)</label>
-                                <input type="number" id="restTime" placeholder="60" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                            <p id="todayCount" class="text-xl font-bold text-indigo-900">0</p>
+                            <p class="text-xs text-indigo-600">exercícios</p>
+                        </div>
+                        <div class="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-3">
+                            <div class="flex items-center gap-1 text-purple-600 mb-1">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                                <span class="text-xs font-medium">Tempo</span>
                             </div>
+                            <p id="todayDuration" class="text-xl font-bold text-purple-900">0</p>
+                            <p class="text-xs text-purple-600">minutos</p>
                         </div>
-
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Notas</label>
-                            <textarea id="notes" placeholder="Como te sentiste?" rows="2" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea>
-                        </div>
-
-                        <div class="flex gap-3 pt-2">
-                            <button id="saveBtn" class="flex-1 bg-indigo-600 text-white rounded-lg py-3 font-semibold hover:bg-indigo-700 transition">
-                                Guardar
-                            </button>
-                            <button id="cancelBtn" class="flex-1 bg-gray-200 text-gray-700 rounded-lg py-3 font-semibold hover:bg-gray-300 transition">
-                                Cancelar
-                            </button>
+                        <div class="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-3">
+                            <div class="flex items-center gap-1 text-green-600 mb-1">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                                </svg>
+                                <span class="text-xs font-medium">Semana</span>
+                            </div>
+                            <p id="weekCount" class="text-xl font-bold text-green-900">0</p>
+                            <p class="text-xs text-green-600">treinos</p>
                         </div>
                     </div>
                 </div>
 
-                <!-- Lista de Workouts -->
-                <div id="workoutList" class="space-y-3"></div>
+                <!-- Navigation Tabs -->
+                <div class="bg-white rounded-2xl shadow-lg p-2 mb-6">
+                    <div class="grid grid-cols-3 gap-2">
+                        <button onclick="showTab('workouts')" id="tab-workouts" class="tab-active py-3 px-4 rounded-xl font-semibold text-sm transition">
+                            Treinos
+                        </button>
+                        <button onclick="showTab('schedule')" id="tab-schedule" class="py-3 px-4 rounded-xl font-semibold text-sm transition bg-gray-100 text-gray-700 hover:bg-gray-200">
+                            Planeamento
+                        </button>
+                        <button onclick="showTab('progress')" id="tab-progress" class="py-3 px-4 rounded-xl font-semibold text-sm transition bg-gray-100 text-gray-700 hover:bg-gray-200">
+                            Progresso
+                        </button>
+                    </div>
+                </div>
 
-                <!-- Mensagem vazia -->
-                <div id="emptyState" class="bg-white rounded-2xl shadow-lg p-12 text-center">
-                    <div class="bg-gray-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <svg class="text-gray-400 w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path>
+                <!-- TAB 1: WORKOUTS -->
+                <div id="content-workouts">
+                    <button id="showFormBtn" class="w-full bg-indigo-600 text-white rounded-xl py-4 px-6 mb-6 flex items-center justify-center gap-2 hover:bg-indigo-700 transition shadow-lg">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
                         </svg>
+                        <span class="font-semibold">Adicionar Exercício</span>
+                    </button>
+
+                    <!-- Formulário -->
+                    <div id="workoutForm" class="bg-white rounded-2xl shadow-lg p-6 mb-6 hidden">
+                        <h2 class="text-xl font-bold text-gray-800 mb-4">Novo Exercício</h2>
+                        
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Exercício *</label>
+                                <select id="exercise" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                                    <option value="">Seleciona um exercício</option>
+                                    <option value="Reforço muscular com pesos">Reforço muscular com pesos</option>
+                                    <option value="Flexões">Flexões</option>
+                                    <option value="Abdominais">Abdominais</option>
+                                    <option value="Agachamentos">Agachamentos</option>
+                                    <option value="Burpees">Burpees</option>
+                                    <option value="Prancha">Prancha</option>
+                                    <option value="Lunges">Lunges</option>
+                                    <option value="Mountain Climbers">Mountain Climbers</option>
+                                    <option value="Jumping Jacks">Jumping Jacks</option>
+                                    <option value="Tríceps">Tríceps</option>
+                                    <option value="Outro">Outro</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Posição</label>
+                                <input type="text" id="position" placeholder="Ex: Em pé, Deitado, Sentado..." class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Séries</label>
+                                    <input type="number" id="sets" placeholder="3" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Segundos/série</label>
+                                    <input type="number" id="secondsPerSet" placeholder="15" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Repetições</label>
+                                <input type="number" id="reps" placeholder="12" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Duração (minutos)</label>
+                                <input type="number" id="duration" placeholder="15" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Peso (kg)</label>
+                                    <input type="number" id="weight" placeholder="10" step="0.5" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Descanso (seg)</label>
+                                    <input type="number" id="restTime" placeholder="60" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Notas</label>
+                                <textarea id="notes" placeholder="Como te sentiste?" rows="2" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea>
+                            </div>
+
+                            <div class="flex gap-3 pt-2">
+                                <button id="saveBtn" class="flex-1 bg-indigo-600 text-white rounded-lg py-3 font-semibold hover:bg-indigo-700 transition">
+                                    Guardar
+                                </button>
+                                <button id="cancelBtn" class="flex-1 bg-gray-200 text-gray-700 rounded-lg py-3 font-semibold hover:bg-gray-300 transition">
+                                    Cancelar
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                    <p class="text-gray-500 font-medium">Ainda não tens treinos registados</p>
-                    <p class="text-gray-400 text-sm mt-1">Adiciona o teu primeiro exercício!</p>
-                </div>
-            </div>
 
-            <!-- TAB 2: SCHEDULE -->
-            <div id="content-schedule" class="hidden">
-                <div class="bg-white rounded-2xl shadow-lg p-6 mb-6">
-                    <h2 class="text-xl font-bold text-gray-800 mb-4">Planeamento Semanal</h2>
-                    <p class="text-sm text-gray-600 mb-6">Planeia os teus treinos para cada dia da semana</p>
-                    
-                    <div id="weekSchedule" class="space-y-3"></div>
-                </div>
-            </div>
+                    <!-- Lista de Workouts -->
+                    <div id="workoutList" class="space-y-3"></div>
 
-            <!-- TAB 3: PROGRESS -->
-            <div id="content-progress" class="hidden">
-                <div class="bg-white rounded-2xl shadow-lg p-6 mb-6">
-                    <h2 class="text-xl font-bold text-gray-800 mb-4">Progresso</h2>
-                    <div class="mb-6">
-                        <canvas id="progressChart" height="250"></canvas>
+                    <!-- Mensagem vazia -->
+                    <div id="emptyState" class="bg-white rounded-2xl shadow-lg p-12 text-center hidden">
+                        <div class="bg-gray-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <svg class="text-gray-400 w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path>
+                            </svg>
+                        </div>
+                        <p class="text-gray-500 font-medium">Ainda não tens treinos registados</p>
+                        <p class="text-gray-400 text-sm mt-1">Adiciona o teu primeiro exercício!</p>
                     </div>
                 </div>
 
-                <!-- Estatísticas por exercício -->
-                <div class="bg-white rounded-2xl shadow-lg p-6">
-                    <h2 class="text-xl font-bold text-gray-800 mb-4">Estatísticas por Exercício</h2>
-                    <div id="exerciseStats" class="space-y-3"></div>
+                <!-- TAB 2: SCHEDULE -->
+                <div id="content-schedule" class="hidden">
+                    <div class="bg-white rounded-2xl shadow-lg p-6 mb-6">
+                        <h2 class="text-xl font-bold text-gray-800 mb-4">Planeamento Semanal</h2>
+                        <p class="text-sm text-gray-600 mb-6">Planeia os teus treinos para cada dia da semana</p>
+                        
+                        <div id="weekSchedule" class="space-y-3"></div>
+                    </div>
+                </div>
+
+                <!-- TAB 3: PROGRESS -->
+                <div id="content-progress" class="hidden">
+                    <div class="bg-white rounded-2xl shadow-lg p-6 mb-6">
+                        <h2 class="text-xl font-bold text-gray-800 mb-4">Progresso</h2>
+                        <div class="mb-6">
+                            <canvas id="progressChart" height="250"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-2xl shadow-lg p-6">
+                        <h2 class="text-xl font-bold text-gray-800 mb-4">Estatísticas por Exercício</h2>
+                        <div id="exerciseStats" class="space-y-3"></div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
+        // NOTA: ESTE É UM EXEMPLO COM FIREBASE
+        // Para funcionar, precisas de criar um projeto Firebase gratuito
+        // Instruções detalhadas no README
+
+        // Configuração Firebase (substitui com os teus dados)
+        const firebaseConfig = {
+            apiKey: "AIzaSyAW3wMwwF4JxdZo_oq0In_iFIvsgJcAo58",
+            authDomain: "treino-caseiro.firebaseapp.com",
+            databaseURL: "https://treino-caseiro-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "treino-caseiro",
+            storageBucket: "treino-caseiro.firebasestorage.app",
+            messagingSenderId: "193739129717",
+            appId: "1:193739129717:web:521f9c571e86fa743e893c"
+        };
+
+        let database;
+        let currentUserId = null;
         let workouts = [];
         let weeklyPlan = {};
         let progressChart = null;
+        let isFirebaseConfigured = false;
         const weekDays = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
 
-        // Carregar dados
-        function loadData() {
-            const storedWorkouts = localStorage.getItem('workouts');
-            const storedPlan = localStorage.getItem('weeklyPlan');
+        // Verificar se Firebase está configurado
+        function checkFirebaseConfig() {
+            return firebaseConfig.apiKey !== "SUA_API_KEY_AQUI";
+        }
+
+        // Inicializar app
+        function initApp() {
+            const storedUserId = localStorage.getItem('workoutUserId');
+            
+            if (storedUserId) {
+                currentUserId = storedUserId;
+                document.getElementById('setupScreen').classList.add('hidden');
+                document.getElementById('mainApp').classList.remove('hidden');
+                document.getElementById('displayUserId').textContent = currentUserId;
+                
+                if (checkFirebaseConfig()) {
+                    initFirebase();
+                } else {
+                    loadLocalData();
+                    updateSyncIndicator('offline', 'Sem sincronização');
+                }
+            }
+        }
+
+        // Inicializar Firebase
+        function initFirebase() {
+            try {
+                firebase.initializeApp(firebaseConfig);
+                database = firebase.database();
+                isFirebaseConfigured = true;
+                
+                // Escutar mudanças em tempo real
+                listenToWorkouts();
+                listenToWeeklyPlan();
+                
+                updateSyncIndicator('online', 'Sincronizado');
+            } catch (error) {
+                console.error('Erro ao inicializar Firebase:', error);
+                loadLocalData();
+                updateSyncIndicator('offline', 'Erro na sincronização');
+            }
+        }
+
+        // Atualizar indicador de sincronização
+        function updateSyncIndicator(status, text) {
+            const indicator = document.getElementById('syncIndicator');
+            const textEl = document.getElementById('syncText');
+            
+            indicator.className = 'sync-indicator sync-' + status;
+            textEl.textContent = text;
+        }
+
+        // Guardar User ID
+        function saveUserId() {
+            const input = document.getElementById('userId');
+            const userId = input.value.trim().replace(/\s+/g, '_');
+            
+            if (!userId) {
+                alert('Por favor insere um ID');
+                return;
+            }
+            
+            localStorage.setItem('workoutUserId', userId);
+            currentUserId = userId;
+            
+            document.getElementById('setupScreen').classList.add('hidden');
+            document.getElementById('mainApp').classList.remove('hidden');
+            document.getElementById('displayUserId').textContent = userId;
+            
+            if (checkFirebaseConfig()) {
+                initFirebase();
+            } else {
+                loadLocalData();
+                updateSyncIndicator('offline', 'Local apenas');
+            }
+        }
+
+        // Usar apenas local
+        function useLocalOnly() {
+            const userId = 'local_' + Date.now();
+            localStorage.setItem('workoutUserId', userId);
+            currentUserId = userId;
+            
+            document.getElementById('setupScreen').classList.add('hidden');
+            document.getElementById('mainApp').classList.remove('hidden');
+            document.getElementById('displayUserId').textContent = 'Local';
+            
+            loadLocalData();
+            updateSyncIndicator('offline', 'Sem sincronização');
+        }
+
+        // Mudar User ID
+        function changeUserId() {
+            if (confirm('Tens a certeza? Isto irá mudar para outra conta.')) {
+                localStorage.removeItem('workoutUserId');
+                location.reload();
+            }
+        }
+
+        // Carregar dados locais (fallback)
+        function loadLocalData() {
+            const storedWorkouts = localStorage.getItem('workouts_' + currentUserId);
+            const storedPlan = localStorage.getItem('weeklyPlan_' + currentUserId);
             
             if (storedWorkouts) workouts = JSON.parse(storedWorkouts);
             if (storedPlan) weeklyPlan = JSON.parse(storedPlan);
             
-            renderWorkouts();
-            renderWeekSchedule();
-            updateStats();
-            updateProgress();
+            renderAll();
         }
 
-        // Guardar dados
-        function saveWorkouts() {
-            localStorage.setItem('workouts', JSON.stringify(workouts));
+        // Guardar dados locais
+        function saveLocal() {
+            localStorage.setItem('workouts_' + currentUserId, JSON.stringify(workouts));
+            localStorage.setItem('weeklyPlan_' + currentUserId, JSON.stringify(weeklyPlan));
         }
 
-        function savePlan() {
-            localStorage.setItem('weeklyPlan', JSON.stringify(weeklyPlan));
-        }
-
-        // Alternar tabs
-        function showTab(tab) {
-            // Esconder todos
-            document.getElementById('content-workouts').classList.add('hidden');
-            document.getElementById('content-schedule').classList.add('hidden');
-            document.getElementById('content-progress').classList.add('hidden');
+        // Escutar workouts no Firebase
+        function listenToWorkouts() {
+            if (!isFirebaseConfigured) return;
             
-            // Remover active de todos os botões
-            document.querySelectorAll('[id^="tab-"]').forEach(btn => {
-                btn.classList.remove('tab-active');
-                btn.classList.add('bg-gray-100', 'text-gray-700', 'hover:bg-gray-200');
+            database.ref('users/' + currentUserId + '/workouts').on('value', (snapshot) => {
+                const data = snapshot.val();
+                workouts = data ? Object.values(data) : [];
+                renderAll();
             });
+        }
+
+        // Escutar plano semanal no Firebase
+        function listenToWeeklyPlan() {
+            if (!isFirebaseConfigured) return;
             
-            // Mostrar selecionado
-            document.getElementById('content-' + tab).classList.remove('hidden');
-            const activeBtn = document.getElementById('tab-' + tab);
-            activeBtn.classList.add('tab-active');
-            activeBtn.classList.remove('bg-gray-100', 'text-gray-700', 'hover:bg-gray-200');
+            database.ref('users/' + currentUserId + '/weeklyPlan').on('value', (snapshot) => {
+                weeklyPlan = snapshot.val() || {};
+                renderWeekSchedule();
+            });
+        }
+
+        // Adicionar workout
+        function addWorkout() {
+            const exercise = document.getElementById('exercise').value;
+            if (!exercise) {
+                alert('Por favor seleciona um exercício');
+                return;
+            }
+
+            const workout = {
+                id: Date.now(),
+                exercise: exercise,
+                position: document.getElementById('position').value,
+                sets: document.getElementById('sets').value,
+                secondsPerSet: document.getElementById('secondsPerSet').value,
+                reps: document.getElementById('reps').value,
+                duration: document.getElementById('duration').value,
+                weight: document.getElementById('weight').value,
+                restTime: document.getElementById('restTime').value,
+                notes: document.getElementById('notes').value,
+                date: new Date().toISOString()
+            };
+
+            if (isFirebaseConfigured) {
+                updateSyncIndicator('syncing', 'A sincronizar...');
+                database.ref('users/' + currentUserId + '/workouts/' + workout.id).set(workout)
+                    .then(() => {
+                        updateSyncIndicator('online', 'Sincronizado');
+                    })
+                    .catch(() => {
+                        updateSyncIndicator('offline', 'Erro ao sincronizar');
+                    });
+            } else {
+                workouts.unshift(workout);
+                saveLocal();
+                renderAll();
+            }
+
+            hideForm();
+        }
+
+        // Eliminar workout
+        function deleteWorkout(id) {
+            if (confirm('Tens a certeza?')) {
+                if (isFirebaseConfigured) {
+                    database.ref('users/' + currentUserId + '/workouts/' + id).remove();
+                } else {
+                    workouts = workouts.filter(w => w.id !== id);
+                    saveLocal();
+                    renderAll();
+                }
+            }
+        }
+
+        // Adicionar ao plano
+        function addToPlan(day) {
+            const exercise = prompt('Que exercício queres adicionar a ' + day + '?', 'Flexões');
+            if (exercise && exercise.trim()) {
+                if (!weeklyPlan[day]) weeklyPlan[day] = [];
+                weeklyPlan[day].push(exercise.trim());
+                
+                if (isFirebaseConfigured) {
+                    database.ref('users/' + currentUserId + '/weeklyPlan/' + day).set(weeklyPlan[day]);
+                } else {
+                    saveLocal();
+                    renderWeekSchedule();
+                }
+            }
+        }
+
+        // Remover do plano
+        function removeFromPlan(day, index) {
+            weeklyPlan[day].splice(index, 1);
             
-            if (tab === 'progress') {
-                updateProgress();
+            if (isFirebaseConfigured) {
+                database.ref('users/' + currentUserId + '/weeklyPlan/' + day).set(weeklyPlan[day]);
+            } else {
+                saveLocal();
+                renderWeekSchedule();
             }
         }
 
@@ -282,6 +565,47 @@
             return date.toLocaleDateString('pt-PT', { day: 'numeric', month: 'short' }) + ` às ${timeStr}`;
         }
 
+        // Alternar tabs
+        function showTab(tab) {
+            document.getElementById('content-workouts').classList.add('hidden');
+            document.getElementById('content-schedule').classList.add('hidden');
+            document.getElementById('content-progress').classList.add('hidden');
+            
+            document.querySelectorAll('[id^="tab-"]').forEach(btn => {
+                btn.classList.remove('tab-active');
+                btn.classList.add('bg-gray-100', 'text-gray-700', 'hover:bg-gray-200');
+            });
+            
+            document.getElementById('content-' + tab).classList.remove('hidden');
+            const activeBtn = document.getElementById('tab-' + tab);
+            activeBtn.classList.add('tab-active');
+            activeBtn.classList.remove('bg-gray-100', 'text-gray-700', 'hover:bg-gray-200');
+            
+            if (tab === 'progress') {
+                updateProgress();
+            }
+        }
+
+        // Mostrar/esconder formulário
+        function showForm() {
+            document.getElementById('workoutForm').classList.remove('hidden');
+            document.getElementById('showFormBtn').classList.add('hidden');
+        }
+
+        function hideForm() {
+            document.getElementById('workoutForm').classList.add('hidden');
+            document.getElementById('showFormBtn').classList.remove('hidden');
+            document.getElementById('exercise').value = '';
+            document.getElementById('position').value = '';
+            document.getElementById('sets').value = '';
+            document.getElementById('secondsPerSet').value = '';
+            document.getElementById('reps').value = '';
+            document.getElementById('duration').value = '';
+            document.getElementById('weight').value = '';
+            document.getElementById('restTime').value = '';
+            document.getElementById('notes').value = '';
+        }
+
         // Atualizar estatísticas
         function updateStats() {
             const today = new Date().toDateString();
@@ -289,7 +613,6 @@
                 new Date(w.date).toDateString() === today
             );
             
-            // Última semana
             const weekAgo = new Date();
             weekAgo.setDate(weekAgo.getDate() - 7);
             const weekWorkouts = workouts.filter(w => 
@@ -304,7 +627,7 @@
             document.getElementById('weekCount').textContent = weekWorkouts.length;
         }
 
-        // Renderizar lista de workouts
+        // Renderizar workouts
         function renderWorkouts() {
             const list = document.getElementById('workoutList');
             const emptyState = document.getElementById('emptyState');
@@ -316,7 +639,11 @@
             }
 
             emptyState.classList.add('hidden');
-            list.innerHTML = workouts.map(workout => `
+            
+            // Ordenar por data (mais recente primeiro)
+            const sortedWorkouts = [...workouts].sort((a, b) => new Date(b.date) - new Date(a.date));
+            
+            list.innerHTML = sortedWorkouts.map(workout => `
                 <div class="bg-white rounded-xl shadow-md p-5 hover:shadow-lg transition">
                     <div class="flex justify-between items-start mb-3">
                         <div class="flex-1">
@@ -353,7 +680,7 @@
         // Renderizar planeamento semanal
         function renderWeekSchedule() {
             const container = document.getElementById('weekSchedule');
-            container.innerHTML = weekDays.map((day, index) => {
+            container.innerHTML = weekDays.map((day) => {
                 const dayPlan = weeklyPlan[day] || [];
                 return `
                     <div class="border border-gray-200 rounded-xl p-4">
@@ -385,27 +712,8 @@
             }).join('');
         }
 
-        // Adicionar ao plano
-        function addToPlan(day) {
-            const exercise = prompt('Que exercício queres adicionar a ' + day + '?', 'Flexões');
-            if (exercise && exercise.trim()) {
-                if (!weeklyPlan[day]) weeklyPlan[day] = [];
-                weeklyPlan[day].push(exercise.trim());
-                savePlan();
-                renderWeekSchedule();
-            }
-        }
-
-        // Remover do plano
-        function removeFromPlan(day, index) {
-            weeklyPlan[day].splice(index, 1);
-            savePlan();
-            renderWeekSchedule();
-        }
-
         // Atualizar gráfico de progresso
         function updateProgress() {
-            // Dados dos últimos 14 dias
             const days = 14;
             const labels = [];
             const data = [];
@@ -423,12 +731,10 @@
                 data.push(dayWorkouts.length);
             }
 
-            // Destruir gráfico anterior se existir
             if (progressChart) {
                 progressChart.destroy();
             }
 
-            // Criar novo gráfico
             const ctx = document.getElementById('progressChart').getContext('2d');
             progressChart = new Chart(ctx, {
                 type: 'line',
@@ -462,7 +768,6 @@
                 }
             });
 
-            // Estatísticas por exercício
             renderExerciseStats();
         }
 
@@ -511,63 +816,11 @@
             `).join('');
         }
 
-        // Adicionar workout
-        function addWorkout() {
-            const exercise = document.getElementById('exercise').value;
-            if (!exercise) {
-                alert('Por favor seleciona um exercício');
-                return;
-            }
-
-            const workout = {
-                id: Date.now(),
-                exercise: exercise,
-                position: document.getElementById('position').value,
-                sets: document.getElementById('sets').value,
-                secondsPerSet: document.getElementById('secondsPerSet').value,
-                reps: document.getElementById('reps').value,
-                duration: document.getElementById('duration').value,
-                weight: document.getElementById('weight').value,
-                restTime: document.getElementById('restTime').value,
-                notes: document.getElementById('notes').value,
-                date: new Date().toISOString()
-            };
-
-            workouts.unshift(workout);
-            saveWorkouts();
-            renderWorkouts();
+        // Renderizar tudo
+        function renderAll() {
             updateStats();
-            hideForm();
-        }
-
-        // Eliminar workout
-        function deleteWorkout(id) {
-            if (confirm('Tens a certeza que queres eliminar este exercício?')) {
-                workouts = workouts.filter(w => w.id !== id);
-                saveWorkouts();
-                renderWorkouts();
-                updateStats();
-            }
-        }
-
-        // Mostrar/esconder formulário
-        function showForm() {
-            document.getElementById('workoutForm').classList.remove('hidden');
-            document.getElementById('showFormBtn').classList.add('hidden');
-        }
-
-        function hideForm() {
-            document.getElementById('workoutForm').classList.add('hidden');
-            document.getElementById('showFormBtn').classList.remove('hidden');
-            document.getElementById('exercise').value = '';
-            document.getElementById('position').value = '';
-            document.getElementById('sets').value = '';
-            document.getElementById('secondsPerSet').value = '';
-            document.getElementById('reps').value = '';
-            document.getElementById('duration').value = '';
-            document.getElementById('weight').value = '';
-            document.getElementById('restTime').value = '';
-            document.getElementById('notes').value = '';
+            renderWorkouts();
+            renderWeekSchedule();
         }
 
         // Event listeners
@@ -575,8 +828,8 @@
         document.getElementById('saveBtn').addEventListener('click', addWorkout);
         document.getElementById('cancelBtn').addEventListener('click', hideForm);
 
-        // Carregar ao iniciar
-        loadData();
+        // Iniciar app
+        initApp();
     </script>
 </body>
 </html>
